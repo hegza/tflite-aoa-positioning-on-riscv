@@ -6,10 +6,6 @@ fn main() -> Result<()> {
     let model = Model::from_file("../models/2022-03-11-model.tflite")?;
     let model = FlatBufferModel::build_from_model(&model)?;
 
-    // Build the interpreter with the InterpreterBuilder.
-    // Note: all Interpreters should be built with the InterpreterBuilder,
-    // which allocates memory for the Interpreter and does various set up
-    // tasks so that the Interpreter can read the provided model.
     let resolver = BuiltinOpResolver::default();
 
     let builder = InterpreterBuilder::new(model, &resolver)?;
