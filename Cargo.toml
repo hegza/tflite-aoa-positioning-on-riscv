@@ -1,0 +1,10 @@
+[package]
+name = "rust-proto-4"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+fs-err = "2.7.0"
+tflite = "0.9.6"
