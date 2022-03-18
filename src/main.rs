@@ -17,7 +17,6 @@ fn main() -> Result<(), Error> {
     SimpleLogger::new().init()?;
 
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
-    //let model = FlatBufferModel::build_from_model(&model)?;
     log::info!("Call Model::from_buffer");
     let model = Model::from_buffer(&model_array[..])?;
 
@@ -32,9 +31,6 @@ fn main() -> Result<(), Error> {
     log::info!("Call AllOpResolver::new");
     let op_resolver = AllOpResolver::new();
 
-    /*
-    let builder = InterpreterBuilder::new(model, &resolver)?;
-    let mut interpreter = builder.build()?;*/
     log::info!("Call MicroInterpreter::new");
     let mut interpreter = match MicroInterpreter::new(&model, op_resolver, &mut arena[..]) {
         Ok(i) => i,
