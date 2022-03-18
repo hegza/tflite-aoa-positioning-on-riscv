@@ -1,9 +1,13 @@
+#![no_std]
+#![no_main]
+
 mod error;
 
 use aligned::{Aligned, A16};
-use error::Error;
-use simple_logger::SimpleLogger;
+use core::{fmt::Write, panic::PanicInfo};
+use riscv_rt::entry;
 use tfmicro::{AllOpResolver, MicroInterpreter, Model};
+use uart_16550::MmioSerialPort;
 
 macro_rules! assert_delta {
     ($x:expr, $y:expr, $d:expr) => {
@@ -13,12 +17,33 @@ macro_rules! assert_delta {
     };
 }
 
-fn main() -> Result<(), Error> {
-    SimpleLogger::new().init()?;
+const SERIAL_PORT_BASE_ADDRESS: usize = 0x6000_1800;
+
+struct GlobalSerial(Option<MmioSerialPort>);
+
+static mut SERIAL_PORT: GlobalSerial = GlobalSerial(None);
+
+impl core::fmt::Write for GlobalSerial {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.0
+            .as_mut()
+            .map(|serial_port| write!(serial_port, "{}", s))
+            .unwrap()
+    }
+}
+
+#[entry]
+unsafe fn main() -> ! {
+    let mut serial_port = MmioSerialPort::new(SERIAL_PORT_BASE_ADDRESS);
+    serial_port.init();
+
+    SERIAL_PORT.0 = Some(serial_port);
+
+    write!(SERIAL_PORT, "Start\r\n").unwrap();
 
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
     log::info!("Call Model::from_buffer");
-    let model = Model::from_buffer(&model_array[..])?;
+    let model = Model::from_buffer(&model_array[..]).unwrap();
 
     const NUM_IN_FLOATS: usize = 5760;
     const NUM_OUT_FLOATS: usize = 3;
@@ -39,21 +64,31 @@ fn main() -> Result<(), Error> {
 
     // Generate input data
     let input_data = [1f32; 20 * 9 * 16 * 2];
-    interpreter.input(0, &input_data)?;
+
+    // ???: blows up here
+    interpreter.input(0, &input_data).unwrap();
 
     // Run inference
     log::info!("Call MicroInterpreter::new");
-    interpreter.invoke()?;
+    interpreter.invoke().unwrap();
 
     // Read output buffers
     let output: &[f32] = interpreter.output(0).as_data::<f32>();
 
     log::info!("Output: {:?}", output);
+    write!(SERIAL_PORT, "Output: {:?}\r\n", output).unwrap();
 
     let correct = &[0.4572307, 0.53414774, 0.];
     for (c, o) in correct.iter().zip(output) {
         assert_delta!(c, o, 0.01);
     }
 
-    Ok(())
+    loop {}
+}
+
+#[panic_handler]
+unsafe fn panic(info: &PanicInfo) -> ! {
+    writeln!(SERIAL_PORT, "{}", info).ok();
+
+    loop {}
 }
