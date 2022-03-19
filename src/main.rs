@@ -42,7 +42,6 @@ unsafe fn main() -> ! {
     write!(SERIAL_PORT, "Start\r\n").unwrap();
 
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
-    log::info!("Call Model::from_buffer");
     let model = Model::from_buffer(&model_array[..]).unwrap();
 
     const NUM_IN_FLOATS: usize = 5760;
@@ -53,10 +52,8 @@ unsafe fn main() -> ! {
         4 * (NUM_IN_FLOATS + NUM_OUT_FLOATS + NUM_MARGIN_FLOATS + NUM_ACTIVATION_BUFFERS);
     let mut arena: Aligned<A16, [u8; TENSOR_ARENA_SIZE]> = Aligned([0u8; TENSOR_ARENA_SIZE]);
 
-    log::info!("Call AllOpResolver::new");
     let op_resolver = AllOpResolver::new();
 
-    log::info!("Call MicroInterpreter::new");
     let mut interpreter = match MicroInterpreter::new(&model, op_resolver, &mut arena[..]) {
         Ok(i) => i,
         Err(e) => panic!("Error constructing interpreter:\n{:#?}", e),
@@ -65,23 +62,22 @@ unsafe fn main() -> ! {
     // Generate input data
     let input_data = [1f32; 20 * 9 * 16 * 2];
 
-    // ???: blows up here
     interpreter.input(0, &input_data).unwrap();
 
     // Run inference
-    log::info!("Call MicroInterpreter::new");
+    write!(SERIAL_PORT, "MicroInterpreter::invoke\r\n").unwrap();
     interpreter.invoke().unwrap();
 
     // Read output buffers
     let output: &[f32] = interpreter.output(0).as_data::<f32>();
 
-    log::info!("Output: {:?}", output);
     write!(SERIAL_PORT, "Output: {:?}\r\n", output).unwrap();
 
     let correct = &[0.4572307, 0.53414774, 0.];
     for (c, o) in correct.iter().zip(output) {
         assert_delta!(c, o, 0.01);
     }
+    write!(SERIAL_PORT, "Assert OK!\r\n").unwrap();
 
     loop {}
 }

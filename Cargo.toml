@@ -8,7 +8,6 @@ version = "0.1.0"
 [dependencies]
 aligned = "0.4.0"
 log = "0.4.14"
-#panic-halt = "0.2.0"
 riscv-rt = "0.8.1"
-tfmicro = {path = "../tfmicro"}
+tfmicro = {git = "https://github.com/hegza/tfmicro", branch = "riscv1" }
 uart_16550 = {version = "0.2.16", default-features = false, features = ["stable"]}
