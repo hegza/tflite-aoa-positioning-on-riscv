@@ -21,6 +21,14 @@ macro_rules! assert_delta {
 // UART address
 const SERIAL_PORT_BASE_ADDRESS: usize = 0x6000_1800;
 
+// Numbers for constructing the tensor arena
+const NUM_IN_FLOATS: usize = 5760;
+const NUM_OUT_FLOATS: usize = 3;
+const NUM_MARGIN_FLOATS: usize = 2000;
+const NUM_ACTIVATION_BUFFERS: usize = 4464;
+const TENSOR_ARENA_SIZE: usize =
+    4 * (NUM_IN_FLOATS + NUM_OUT_FLOATS + NUM_MARGIN_FLOATS + NUM_ACTIVATION_BUFFERS);
+
 /// Wrapper for the UART resource
 struct GlobalSerial(Option<MmioSerialPort>);
 
@@ -29,26 +37,18 @@ static mut SERIAL_PORT: GlobalSerial = GlobalSerial(None);
 
 #[entry]
 unsafe fn main() -> ! {
-    let mut serial_port = MmioSerialPort::new(SERIAL_PORT_BASE_ADDRESS);
-    serial_port.init();
-
-    SERIAL_PORT.0 = Some(serial_port);
+    // Init the UART
+    SERIAL_PORT.0 = Some(init_serial());
 
     writeln!(SERIAL_PORT, "Start").unwrap();
 
+    // Construct model
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
     let model = Model::from_buffer(&model_array[..]).unwrap();
 
-    const NUM_IN_FLOATS: usize = 5760;
-    const NUM_OUT_FLOATS: usize = 3;
-    const NUM_MARGIN_FLOATS: usize = 2000;
-    const NUM_ACTIVATION_BUFFERS: usize = 4464;
-    const TENSOR_ARENA_SIZE: usize =
-        4 * (NUM_IN_FLOATS + NUM_OUT_FLOATS + NUM_MARGIN_FLOATS + NUM_ACTIVATION_BUFFERS);
+    // Init interpreter
     let mut arena: Aligned<A16, [u8; TENSOR_ARENA_SIZE]> = Aligned([0u8; TENSOR_ARENA_SIZE]);
-
     let op_resolver = AllOpResolver::new();
-
     let mut interpreter = match MicroInterpreter::new(&model, op_resolver, &mut arena[..]) {
         Ok(i) => i,
         Err(e) => panic!("Error constructing interpreter:\n{:#?}", e),
@@ -56,7 +56,6 @@ unsafe fn main() -> ! {
 
     // Generate input data
     let input_data = [1f32; 20 * 9 * 16 * 2];
-
     interpreter.input(0, &input_data).unwrap();
 
     // Run inference
@@ -65,9 +64,9 @@ unsafe fn main() -> ! {
 
     // Read output buffers
     let output: &[f32] = interpreter.output(0).as_data::<f32>();
-
     writeln!(SERIAL_PORT, "Output: {:?}", output).unwrap();
 
+    // Asert correctness
     let correct = &[0.4572307, 0.53414774, 0.];
     for (c, o) in correct.iter().zip(output) {
         assert_delta!(c, o, 0.01);
@@ -75,6 +74,12 @@ unsafe fn main() -> ! {
     writeln!(SERIAL_PORT, "Assert OK!").unwrap();
 
     loop {}
+}
+
+fn init_serial() -> MmioSerialPort {
+    let mut serial_port = unsafe { MmioSerialPort::new(SERIAL_PORT_BASE_ADDRESS) };
+    serial_port.init();
+    serial_port
 }
 
 // Print wrapper for UART
