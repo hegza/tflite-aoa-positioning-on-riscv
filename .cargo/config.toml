@@ -7,8 +7,4 @@ rustflags = [
   "link-arg=-Tmemory.x",
   "-C",
   "link-arg=-Tlink.x",
-  "--cfg",
-  "cxx_experimental_no_alloc",
-  "-C",
-  "link-args=-lc",
 ]
