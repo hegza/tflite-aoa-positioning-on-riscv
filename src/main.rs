@@ -9,6 +9,7 @@ use riscv_rt::entry;
 use tfmicro::{AllOpResolver, MicroInterpreter, Model};
 use uart_16550::MmioSerialPort;
 
+// Macro to assert that a float value is within given bounds
 macro_rules! assert_delta {
     ($x:expr, $y:expr, $d:expr) => {
         if !($x - $y < $d || $y - $x < $d) {
@@ -17,20 +18,14 @@ macro_rules! assert_delta {
     };
 }
 
+// UART address
 const SERIAL_PORT_BASE_ADDRESS: usize = 0x6000_1800;
 
+/// Wrapper for the UART resource
 struct GlobalSerial(Option<MmioSerialPort>);
 
+// Global resource for the UART serial, zero init
 static mut SERIAL_PORT: GlobalSerial = GlobalSerial(None);
-
-impl core::fmt::Write for GlobalSerial {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        self.0
-            .as_mut()
-            .map(|serial_port| write!(serial_port, "{}", s))
-            .unwrap()
-    }
-}
 
 #[entry]
 unsafe fn main() -> ! {
@@ -82,6 +77,17 @@ unsafe fn main() -> ! {
     loop {}
 }
 
+// Print wrapper for UART
+impl core::fmt::Write for GlobalSerial {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.0
+            .as_mut()
+            .map(|serial_port| write!(serial_port, "{}", s))
+            .unwrap()
+    }
+}
+
+// Write error to UART on panic
 #[panic_handler]
 unsafe fn panic(info: &PanicInfo) -> ! {
     writeln!(SERIAL_PORT, "{}", info).ok();
