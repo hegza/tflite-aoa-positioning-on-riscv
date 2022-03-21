@@ -34,7 +34,7 @@ unsafe fn main() -> ! {
 
     SERIAL_PORT.0 = Some(serial_port);
 
-    write!(SERIAL_PORT, "Start\r\n").unwrap();
+    writeln!(SERIAL_PORT, "Start").unwrap();
 
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
     let model = Model::from_buffer(&model_array[..]).unwrap();
@@ -60,19 +60,19 @@ unsafe fn main() -> ! {
     interpreter.input(0, &input_data).unwrap();
 
     // Run inference
-    write!(SERIAL_PORT, "MicroInterpreter::invoke\r\n").unwrap();
+    writeln!(SERIAL_PORT, "MicroInterpreter::invoke").unwrap();
     interpreter.invoke().unwrap();
 
     // Read output buffers
     let output: &[f32] = interpreter.output(0).as_data::<f32>();
 
-    write!(SERIAL_PORT, "Output: {:?}\r\n", output).unwrap();
+    writeln!(SERIAL_PORT, "Output: {:?}", output).unwrap();
 
     let correct = &[0.4572307, 0.53414774, 0.];
     for (c, o) in correct.iter().zip(output) {
         assert_delta!(c, o, 0.01);
     }
-    write!(SERIAL_PORT, "Assert OK!\r\n").unwrap();
+    writeln!(SERIAL_PORT, "Assert OK!").unwrap();
 
     loop {}
 }
