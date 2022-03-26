@@ -4,7 +4,7 @@
 mod error;
 
 use aligned::{Aligned, A16};
-use core::{fmt::Write, panic::PanicInfo};
+use core::{fmt, fmt::Write, panic::PanicInfo};
 use riscv_rt::entry;
 use tfmicro::{AllOpResolver, MicroInterpreter, Model};
 use uart_16550::MmioSerialPort;
@@ -36,44 +36,59 @@ struct GlobalSerial(Option<MmioSerialPort>);
 static mut SERIAL_PORT: GlobalSerial = GlobalSerial(None);
 
 #[entry]
-unsafe fn main() -> ! {
+fn main() -> ! {
+    unsafe {
+        run().unwrap();
+    }
+
+    loop {}
+}
+
+unsafe fn run() -> Result<(), error::Error> {
     // Init the UART
     SERIAL_PORT.0 = Some(init_serial());
 
-    writeln!(SERIAL_PORT, "Start").unwrap();
+    writeln!(SERIAL_PORT, "main")?;
 
     // Construct model
+    writeln!(SERIAL_PORT, "1")?;
     let model_array = include_bytes!("../../models/2022-03-11-model.tfmicro");
-    let model = Model::from_buffer(&model_array[..]).unwrap();
+    writeln!(SERIAL_PORT, "2")?;
+    let model = Model::from_buffer(&model_array[..])?;
+    writeln!(SERIAL_PORT, "3")?;
 
     // Init interpreter
     let mut arena: Aligned<A16, [u8; TENSOR_ARENA_SIZE]> = Aligned([0u8; TENSOR_ARENA_SIZE]);
+    writeln!(SERIAL_PORT, "4")?;
     let op_resolver = AllOpResolver::new();
+    writeln!(SERIAL_PORT, "5")?;
     let mut interpreter = match MicroInterpreter::new(&model, op_resolver, &mut arena[..]) {
         Ok(i) => i,
         Err(e) => panic!("Error constructing interpreter:\n{:#?}", e),
     };
+    writeln!(SERIAL_PORT, "6")?;
 
     // Generate input data
     let input_data = [1f32; 20 * 9 * 16 * 2];
-    interpreter.input(0, &input_data).unwrap();
+    interpreter.input(0, &input_data)?;
 
     // Run inference
-    writeln!(SERIAL_PORT, "MicroInterpreter::invoke").unwrap();
-    interpreter.invoke().unwrap();
+    writeln!(SERIAL_PORT, "MicroInterpreter::invoke")?;
+    interpreter.invoke()?;
+    writeln!(SERIAL_PORT, "MicroInterpreter::invoke return")?;
 
     // Read output buffers
     let output: &[f32] = interpreter.output(0).as_data::<f32>();
-    writeln!(SERIAL_PORT, "Output: {:?}", output).unwrap();
+    writeln!(SERIAL_PORT, "Output: {:?}", output)?;
 
     // Asert correctness
     let correct = &[0.4572307, 0.53414774, 0.];
     for (c, o) in correct.iter().zip(output) {
         assert_delta!(c, o, 0.01);
     }
-    writeln!(SERIAL_PORT, "Assert OK!").unwrap();
+    writeln!(SERIAL_PORT, "Assert OK")?;
 
-    loop {}
+    Ok(())
 }
 
 fn init_serial() -> MmioSerialPort {
@@ -84,7 +99,7 @@ fn init_serial() -> MmioSerialPort {
 
 // Print wrapper for UART
 impl core::fmt::Write for GlobalSerial {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
         self.0
             .as_mut()
             .map(|serial_port| write!(serial_port, "{}", s))
